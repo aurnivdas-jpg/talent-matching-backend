@@ -1,195 +1,110 @@
-# Talent Matching PostgreSQL Backend
+# Intelligent Talent Matching Platform — Backend
 
-This backend matches the implemented PostgreSQL/Supabase database schema for the CSIT314 Intelligent Talent Matching Platform.
+**REST API for a university team project connecting candidates with employers.**
+
+Built using Node.js, Express and PostgreSQL (Supabase). The backend supports candidate and employer accounts, job postings, skill-based recommendations and fuzzy searching for jobs and candidates.
+
+> **Scope:** This repository contains the backend, not the complete user interface. The recommendation logic is a rule-based scoring function, not a trained AI or machine-learning model.
+
+## Tech stack
+
+- **Runtime and API:** Node.js, Express
+- **Database:** PostgreSQL, hosted with Supabase during development
+- **Authentication:** JSON Web Tokens (JWT), bcryptjs for password hashing
+- **Search:** PostgreSQL `pg_trgm` and `similarity()`
+- **Validation and middleware:** express-validator, Helmet, CORS
+- **CI:** GitHub Actions with syntax check and a basic smoke test
 
 ## Features
 
-- Node.js + Express REST API
-- PostgreSQL/Supabase connection using `pg`
-- JWT authentication
-- bcrypt password hashing
-- Candidate and employer role authorization
-- Candidate profile management
-- Employer job posting management
-- Skill tables and junction tables
-- Membership-based recommendation limits
-- PostgreSQL `pg_trgm` fuzzy search using `similarity()`
-- GitHub Actions CI workflow
+- Candidate and employer registration and login
+- Role-based access middleware for protected endpoints
+- Candidate profiles with education, experience, work preferences and skills
+- Employer job postings and required skills
+- Candidate and job search with filters and typo-tolerant PostgreSQL matching
+- Rule-based recommendations ranked by skills, education, experience, location and work mode
+- Membership-dependent recommendation limits
+- Relational schema with user, candidate, employer, job, skill and application tables
 
-## Method Names for Sequence Diagram
+## Repository structure
 
-Use these real backend method names in the sequence diagram:
-
-- `registerUser()`
-- `loginUser()`
-- `protect()`
-- `authorizeRoles()`
-- `updateCandidateProfile()`
-- `getCandidateProfile()`
-- `searchCandidates()`
-- `createJobPosting()`
-- `getJobs()`
-- `searchJobs()`
-- `getJobRecommendations()`
-- `getCandidateRecommendations()`
-- `updateMembership()`
-- `calculateMatchScore()`
-
-## Setup
-
-1. Install dependencies:
-
-```bash
-npm install
+```text
+src/
+  config/             # PostgreSQL connection
+  controllers/        # Request handling and SQL queries
+  middleware/         # Authentication and authorisation
+  routes/             # REST API endpoints
+  tests/              # Basic smoke-test script
+  utils/              # Matching and validation helpers
+schema.sql            # PostgreSQL schema
+.github/workflows/    # CI pipeline
+.env.example          # Local environment variable template
 ```
 
-2. Create `.env` file:
+## Main API routes
 
-```bash
-cp .env.example .env
-```
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/auth/register` | Register a candidate or employer |
+| `POST` | `/api/auth/login` | Log in and receive a JWT |
+| `POST` | `/api/candidates/profile` | Update a candidate profile |
+| `GET` | `/api/candidates/search?keyword=...` | Search candidates |
+| `POST` | `/api/jobs` | Create a job posting |
+| `GET` | `/api/jobs` | List jobs |
+| `GET` | `/api/jobs/search?keyword=...` | Search jobs |
+| `GET` | `/api/recommendations/jobs` | Recommend jobs for a candidate |
+| `GET` | `/api/recommendations/candidates/:jobId` | Recommend candidates for an employer's job |
+| `PATCH` | `/api/membership` | Update membership status |
+| `GET` | `/health` | Check database connectivity |
 
-3. Open `.env` and paste the Supabase PostgreSQL connection string:
+Protected routes require a JWT in the `Authorization: Bearer <token>` header.
+
+## Local setup
+
+**Requirements:** Node.js and access to a PostgreSQL database.
+
+1. Clone this repository and open the project directory.
+2. Install packages with `npm install`.
+3. Create a local `.env` file using `cp .env.example .env`.
+4. Set `DATABASE_URL`, `JWT_SECRET` and `PORT` in your `.env` file.
+5. Run `schema.sql` in your development PostgreSQL database.
+6. Start the server using `npm start` (or `npm run dev` with Nodemon).
+7. Check `http://localhost:5050/health` using the default port.
+
+Never commit `.env`, live credentials or actual applicant information to GitHub.
+
+### Example environment variables
 
 ```env
 PORT=5050
-JWT_SECRET=change_this_to_a_long_random_secret
-DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@YOUR_HOST:5432/postgres
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
+JWT_SECRET=replace_with_your_own_long_random_secret
 ```
 
-Never commit `.env` to GitHub.
-
-4. Start backend:
+### Checks
 
 ```bash
-npm start
+npm run lint
+npm test
 ```
 
-5. Check database connection:
+The existing GitHub Actions workflow runs these commands. **The current test is only a basic smoke-test placeholder**; it is not a full API, database or security test suite.
 
-```text
-http://localhost:5050/health
-```
+## How the matching works
 
-## API Endpoints
+The `calculateMatchScore()` function in `src/utils/matching.js` assigns up to 100 points: matching skills (40), education (15), sufficient experience (20), work mode (10) and location (15). Results are ranked by that score. This provides an explainable baseline rather than a trained recommendation model.
 
-### Authentication
+## Before production use
 
-`POST /api/auth/register`
+This is an educational backend and **is not production-ready**. In particular:
 
-Candidate body:
+- Registration currently logs request bodies. Remove this logging before using real personal data or passwords.
+- Check the stored `role` values against the schema constraint: the registration controller uses capitalised roles, but `schema.sql` permits lowercase roles.
+- Tighten database TLS verification, error responses, validation and access controls.
+- Add proper automated API and database integration tests.
+- Review how membership status is changed and who is permitted to modify it.
+- Deploy only after testing authentication, database configuration and permissions.
 
-```json
-{
-  "fullName": "Aurniv Das",
-  "email": "aurniv@test.com",
-  "password": "123456",
-  "role": "candidate",
-  "contactInfo": "aurniv@test.com"
-}
-```
+## Suggested portfolio additions
 
-Employer body:
-
-```json
-{
-  "fullName": "Tech Company",
-  "companyName": "Tech Company",
-  "email": "company@test.com",
-  "password": "123456",
-  "role": "employer",
-  "companyInfo": "Software recruitment company",
-  "contactInfo": "company@test.com"
-}
-```
-
-`POST /api/auth/login`
-
-```json
-{
-  "email": "aurniv@test.com",
-  "password": "123456"
-}
-```
-
-### Candidate Profile
-
-`POST /api/candidates/profile`
-
-Requires candidate Bearer token.
-
-```json
-{
-  "fullName": "Aurniv Das",
-  "contactInfo": "aurniv@test.com",
-  "educationLevel": "Bachelor Degree",
-  "major": "Information Technology",
-  "yearsExperience": 1,
-  "workExperience": "Backend development and API testing experience",
-  "preferredWorkMode": "Hybrid",
-  "preferredLocation": "Sydney",
-  "skills": "Node.js, SQL, Express, PostgreSQL"
-}
-```
-
-### Employer Job Posting
-
-`POST /api/jobs`
-
-Requires employer Bearer token.
-
-```json
-{
-  "jobTitle": "Backend Developer",
-  "jobDescription": "Looking for a Node.js backend developer with SQL and API experience",
-  "requiredEducation": "Bachelor Degree",
-  "requiredExperience": 1,
-  "workMode": "Hybrid",
-  "jobLocation": "Sydney",
-  "requiredSkills": "Node.js, SQL, Express, PostgreSQL"
-}
-```
-
-### Search
-
-Job fuzzy search:
-
-```text
-GET /api/jobs/search?keyword=sofware enginer
-```
-
-Candidate fuzzy search:
-
-```text
-GET /api/candidates/search?keyword=postgress
-```
-
-### Recommendations
-
-Candidate job recommendations:
-
-```text
-GET /api/recommendations/jobs
-```
-
-Employer candidate recommendations for a job:
-
-```text
-GET /api/recommendations/candidates/:jobId
-```
-
-### Membership
-
-```text
-PATCH /api/membership
-```
-
-```json
-{
-  "isMember": true
-}
-```
-
-## GitHub Actions
-
-The CI workflow is stored at `.github/workflows/ci.yml`.
+Add an API demonstration, architecture diagram, database ERD and a short explanation of your own responsibilities in the team. Keep those responsibilities accurate and specific.
